@@ -1,0 +1,36 @@
+{
+  "model_id": "models/flux/FLUX.1-dev",
+  "reference_image": "reference/Gotham2.jpg",
+  "input_dir": "inputs",
+  "output_dir": "outputs",
+  "overwrite_outputs": true,
+  "prompts_file": "prompts/multiverse_A.txt",
+  "ip_adapter": {
+    "path": "models/flux_ipa/instantx_flux1_dev_ip_adapter_bf16.safetensors",
+    "image_encoder": "models/google/siglip-so400m-patch14-384",
+    "scale": 0.70,
+    "num_tokens": 128
+  },
+  
+  "loras": [
+    {
+      "path": "models/loras/Flux1D_Ink-77[ink - 77].safetensors",
+      "scale": 0.75,
+      "trigger": "ink style, ink-77r, detailed ink illustration"
+    },
+    {
+      "path": "models/loras/Flux1D_Planet_New_Texas_Bravestarr[planetnewtexas].safetensors",
+      "scale": 0.60,
+      "trigger": "Planet New Texas, Bravestarr style, western sci-fi, cartoonish wild west planet"
+    }
+  ],
+  "strength": 0.55,
+  "num_inference_steps": 28,
+  "guidance_scale": 3.5,
+  "image_size": [1024, 1024],
+  "seed": 666000666,
+  "device": "mps",
+  "torch_dtype": "float16",
+  "model_dtype": "float16",
+  "use_cpu_offload": false
+}

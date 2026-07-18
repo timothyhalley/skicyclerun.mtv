@@ -1,0 +1,8 @@
+{
+    "python.defaultInterpreterPath": "/Users/timothyhalley/.pyenv/versions/3.12.4/bin/python",
+    "python.terminal.activateEnvironment": false,
+    "terminal.integrated.env.osx": {
+        "PYENV_VERSION": ""
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:venv"
+}
