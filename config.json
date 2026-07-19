@@ -8,7 +8,7 @@
   "ip_adapter": {
     "path": "models/flux_ipa/instantx_flux1_dev_ip_adapter_bf16.safetensors",
     "image_encoder": "models/google/siglip-so400m-patch14-384",
-    "scale": 0.70,
+    "scale": 0.75,
     "num_tokens": 128
   },
   
@@ -24,8 +24,8 @@
       "trigger": "Planet New Texas, Bravestarr style, western sci-fi, cartoonish wild west planet"
     }
   ],
-  "strength": 0.55,
-  "num_inference_steps": 28,
+  "strength": 0.65,
+  "num_inference_steps": 30,
   "guidance_scale": 3.5,
   "image_size": [1024, 1024],
   "seed": 666000666,

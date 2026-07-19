@@ -104,6 +104,7 @@ class MultiversePipeline:
         self.config = config
         self.run_logger = run_logger
         self.pipe = None
+        self.ip_model = None
         self.device = _resolve_device(self.config.get("device", "mps"))
         self.config["device"] = self.device
         self.dtype = getattr(torch, self.config.get("model_dtype", "bfloat16"))
@@ -120,20 +121,28 @@ class MultiversePipeline:
     def generate(self, input_image_path, base_prompt, reference_image, output_path, seed=None):
         self._status("🎨", f"Generate: {Path(input_image_path).name}", f"save -> {Path(output_path).name}")
 
-        # Load primary image for img2img
+        # Primary image - drives structure / composition
         input_img = Image.open(input_image_path).convert("RGB")
         target_size = self.config.get("image_size", [1024, 1024])
         input_img = resize_img(input_img, size=target_size)
+
+        # Reference image - drives style / fill via IP-Adapter
+        ref_img = Image.open(reference_image).convert("RGB")
+        ref_img = resize_img(ref_img, size=(384, 384))
 
         triggers = ", ".join(l.get("trigger", "") for l in self.config.get("loras", []))
         full_prompt = f"{base_prompt}, {triggers}, masterpiece, best quality, highly detailed"
 
         generator = torch.Generator(device=self.device).manual_seed(seed or self.config["seed"])
 
-        # Simple img2img (no IP-Adapter yet)
+        # IP-Adapter embeddings from reference image
+        image_emb = self.ip_model.get_image_embeds(ref_img)
+
+        # Generate
         images = self.pipe(
             prompt=full_prompt,
             image=input_img,
+            image_emb=image_emb,           # ← Style injection
             strength=self.config.get("strength", 0.55),
             guidance_scale=self.config.get("guidance_scale", 3.5),
             num_inference_steps=self.config.get("num_inference_steps", 28),
@@ -147,7 +156,7 @@ class MultiversePipeline:
         return result
 
     def load_pipeline(self):
-        self._status("🟡", f"Loading Flux Img2Img ({self.dtype})", "base model")
+        self._status("🟡", f"Loading Flux Img2Img + Kijai IP-Adapter ({self.dtype})", "base model")
         
         self.pipe = FluxImg2ImgPipeline.from_pretrained(
             self.config["model_id"],
@@ -160,4 +169,14 @@ class MultiversePipeline:
         if self.device == "mps":
             self.pipe = self.pipe.to("mps")
 
-        self._status("✅", "Pipeline ready (img2img mode)", "generation")
+        # Initialize IP-Adapter
+        ip_config = self.config["ip_adapter"]
+        self._status("🟡", "Initializing Kijai IP-Adapter", "IP setup")
+        self.ip_model = IPAdapter(
+            sd_pipe=self.pipe,
+            image_encoder_path=ip_config["image_encoder"],
+            ip_ckpt=ip_config["path"],
+            device=self.device,
+            num_tokens=ip_config.get("num_tokens", 128)
+        )
+        self._status("✅", "Pipeline ready with IP-Adapter", "generation")
