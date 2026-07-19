@@ -6,7 +6,7 @@ from PIL import Image
 import torch.nn as nn
 
 # Standard Diffusers
-from diffusers import FluxImg2ImgPipeline
+from diffusers import FluxPipeline
 from transformers import SiglipVisionModel, AutoProcessor
 
 def resize_img(input_image, max_side=1280, min_side=1024, size=None, pad_to_max_side=False, mode=Image.BILINEAR, base_pixel_number=64):
@@ -121,12 +121,10 @@ class MultiversePipeline:
     def generate(self, input_image_path, base_prompt, reference_image, output_path, seed=None):
         self._status("🎨", f"Generate: {Path(input_image_path).name}", f"save -> {Path(output_path).name}")
 
-        # Primary image - drives structure / composition
         input_img = Image.open(input_image_path).convert("RGB")
         target_size = self.config.get("image_size", [1024, 1024])
         input_img = resize_img(input_img, size=target_size)
 
-        # Reference image - drives style / fill via IP-Adapter
         ref_img = Image.open(reference_image).convert("RGB")
         ref_img = resize_img(ref_img, size=(384, 384))
 
@@ -135,15 +133,14 @@ class MultiversePipeline:
 
         generator = torch.Generator(device=self.device).manual_seed(seed or self.config["seed"])
 
-        # IP-Adapter embeddings from reference image
         image_emb = self.ip_model.get_image_embeds(ref_img)
 
-        # Generate
+        # Use regular FluxPipeline + image for img2img-like behavior via strength
         images = self.pipe(
             prompt=full_prompt,
-            image=input_img,
-            image_emb=image_emb,           # ← Style injection
-            strength=self.config.get("strength", 0.55),
+            image=input_img,          # structure
+            image_emb=image_emb,      # style from reference
+            strength=self.config.get("strength", 0.65),
             guidance_scale=self.config.get("guidance_scale", 3.5),
             num_inference_steps=self.config.get("num_inference_steps", 28),
             generator=generator,
@@ -156,9 +153,9 @@ class MultiversePipeline:
         return result
 
     def load_pipeline(self):
-        self._status("🟡", f"Loading Flux Img2Img + Kijai IP-Adapter ({self.dtype})", "base model")
+        self._status("🟡", f"Loading Flux + Kijai IP-Adapter ({self.dtype})", "base model")
         
-        self.pipe = FluxImg2ImgPipeline.from_pretrained(
+        self.pipe = FluxPipeline.from_pretrained(
             self.config["model_id"],
             torch_dtype=self.dtype,
             low_cpu_mem_usage=True,
@@ -169,7 +166,6 @@ class MultiversePipeline:
         if self.device == "mps":
             self.pipe = self.pipe.to("mps")
 
-        # Initialize IP-Adapter
         ip_config = self.config["ip_adapter"]
         self._status("🟡", "Initializing Kijai IP-Adapter", "IP setup")
         self.ip_model = IPAdapter(
