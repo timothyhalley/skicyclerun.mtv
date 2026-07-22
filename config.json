@@ -1,10 +1,10 @@
 {
   "model_id": "models/flux/FLUX.1-dev",
-  "reference_image": "reference/NeoFutureCity.jpeg",
+  "reference_image": "reference/MiniCoastalTown.png",
   "input_dir": "inputs",
   "output_dir": "outputs",
   "overwrite_outputs": true,
-  "prompts_file": "prompts/multiverse_A.txt",
+  "prompts_file": "prompts/miniature_A.txt",
   "ip_adapter": {
     "path": "models/flux_ipa/instantx_flux1_dev_ip_adapter_bf16.safetensors",
     "image_encoder": "models/google/siglip-so400m-patch14-384",
@@ -13,14 +13,14 @@
   },
   "loras": [
     {
-      "path": "models/loras/Flux1D_Rembrandt[style of Rembrandt].safetensors",
-      "scale": 0.70,
-      "trigger": "style of Rembrandt"
+      "path": "models/loras/Flux1D.FaeTasticDetails.safetensors",
+      "scale": 0.88,
+      "trigger": ""
     },
     {
-      "path": "models/loras/Flux1D.Anime_art[Bradhamel art style].safetensors",
+      "path": "models/loras/Flux1D.Mini[xcj].safetensors",
       "scale": 0.70,
-      "trigger": "Bradhamel art style"
+      "trigger": "xcj"
     }
   ],
   "num_inference_steps": 35,
@@ -38,5 +38,5 @@
   "canny_high": 200,
   "strength": 0.65,
   "style_strength": 0.55,
-  "style_prompt": "cyberpunk neon noir, retro‑futuristic, gritty texture, hyperdetailed"
+  "style_prompt": "tiny, field of depth, hyperdetailed"
 }
