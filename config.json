@@ -1,6 +1,6 @@
 {
   "model_id": "models/flux/FLUX.1-dev",
-  "reference_image": "reference/Gotham2.jpg",
+  "reference_image": "reference/NeoFutureCity.jpeg",
   "input_dir": "inputs",
   "output_dir": "outputs",
   "overwrite_outputs": true,
@@ -8,29 +8,35 @@
   "ip_adapter": {
     "path": "models/flux_ipa/instantx_flux1_dev_ip_adapter_bf16.safetensors",
     "image_encoder": "models/google/siglip-so400m-patch14-384",
-    "scale": 0.75,
+    "scale": 0.85,
     "num_tokens": 128
   },
-  
   "loras": [
     {
-      "path": "models/loras/Flux1D_Ink-77[ink - 77].safetensors",
-      "scale": 0.75,
-      "trigger": "ink style, ink-77r, detailed ink illustration"
+      "path": "models/loras/Flux1D_Rembrandt[style of Rembrandt].safetensors",
+      "scale": 0.70,
+      "trigger": "style of Rembrandt"
     },
     {
-      "path": "models/loras/Flux1D_Planet_New_Texas_Bravestarr[planetnewtexas].safetensors",
-      "scale": 0.60,
-      "trigger": "Planet New Texas, Bravestarr style, western sci-fi, cartoonish wild west planet"
+      "path": "models/loras/Flux1D.Anime_art[Bradhamel art style].safetensors",
+      "scale": 0.70,
+      "trigger": "Bradhamel art style"
     }
   ],
-  "strength": 0.65,
-  "num_inference_steps": 30,
-  "guidance_scale": 3.5,
+  "num_inference_steps": 35,
+  "guidance_scale": 3.8,
+  "final_strength": 0.45,
   "image_size": [1024, 1024],
-  "seed": 666000666,
+  "seed_lower_bound": 10000000000,
+  "seed_upper_bound": 99999999999,
+  "seed_fixed_value": null,
   "device": "mps",
   "torch_dtype": "float16",
   "model_dtype": "float16",
-  "use_cpu_offload": false
+  "use_cpu_offload": false,
+  "canny_low": 100,
+  "canny_high": 200,
+  "strength": 0.65,
+  "style_strength": 0.55,
+  "style_prompt": "cyberpunk neon noir, retro‑futuristic, gritty texture, hyperdetailed"
 }
