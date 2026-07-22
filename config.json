@@ -1,16 +1,25 @@
 {
   "model_id": "models/flux/FLUX.1-dev",
-  "reference_image": "reference/MiniCoastalTown.png",
+  "reference_image": "reference/miniaturelady.jpg",
   "input_dir": "inputs",
   "output_dir": "outputs",
   "overwrite_outputs": true,
   "prompts_file": "prompts/miniature_A.txt",
-  "ip_adapter": {
-    "path": "models/flux_ipa/instantx_flux1_dev_ip_adapter_bf16.safetensors",
-    "image_encoder": "models/google/siglip-so400m-patch14-384",
-    "scale": 0.85,
-    "num_tokens": 128
-  },
+
+  "device": "mps",
+  "torch_dtype": "float16",
+  "model_dtype": "float16",
+  "use_cpu_offload": false,
+
+  "seed_lower_bound": 10000000000,
+  "seed_upper_bound": 99999999999,
+  "seed_fixed_value": null,
+
+  "image_size": [1024, 1024],
+
+  "canny_low": 100,
+  "canny_high": 200,
+
   "loras": [
     {
       "path": "models/loras/Flux1D.FaeTasticDetails.safetensors",
@@ -23,20 +32,22 @@
       "trigger": "xcj"
     }
   ],
-  "num_inference_steps": 35,
-  "guidance_scale": 3.8,
-  "final_strength": 0.45,
-  "image_size": [1024, 1024],
-  "seed_lower_bound": 10000000000,
-  "seed_upper_bound": 99999999999,
-  "seed_fixed_value": null,
-  "device": "mps",
-  "torch_dtype": "float16",
-  "model_dtype": "float16",
-  "use_cpu_offload": false,
-  "canny_low": 100,
-  "canny_high": 200,
-  "strength": 0.65,
-  "style_strength": 0.55,
-  "style_prompt": "tiny, field of depth, hyperdetailed"
+
+  "style_prompt": "tiny, field of depth, hyperdetailed, miniature diorama, whimsical atmosphere",
+
+  "stage1_strength": 0.40,
+  "stage1_guidance": 4.0,
+  "stage1_steps": 30,
+
+  "stage2_strength": 0.55,
+  "stage2_guidance": 5.0,
+  "stage2_steps": 32,
+
+  "stage3_strength": 0.60,
+  "stage3_guidance": 5.5,
+  "stage3_steps": 34,
+
+  "stage4_strength": 0.35,
+  "stage4_guidance": 4.0,
+  "stage4_steps": 28
 }

@@ -1,12 +1,13 @@
 import torch
 from PIL import Image
 from pathlib import Path
+import cv2
 from datetime import datetime
 from diffusers import FluxImg2ImgPipeline
 
 from utils import RunLogger, truncate_prompt, build_output_path
 
-class StepPipeline:
+class MiniaturizationPipeline:
     def __init__(self, config, run_logger=None):
         self.config = config
         self.run_logger = run_logger
@@ -46,80 +47,126 @@ class StepPipeline:
                     self._status("❌", f"LoRA failed: {Path(path).stem}")
         self._status("✅", "Pipeline ready")
 
-    def run_full_pipeline(self, input_image_path):
-        self.run_tag = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + input_image_path.stem
+    def run_full(self, input_path):
+        self.run_tag = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + input_path.stem
         base_prompt = open(self.config["prompts_file"], "r", encoding="utf-8").read().strip()
 
-        base_img = self.step1_base_generation(input_image_path, base_prompt)
-        styled_img = self.step2_reference_style(base_img, input_image_path.stem)
-        final_img = self.step3_lora_refine(styled_img, input_image_path.stem)
+        original_img = Image.open(input_path).convert("RGB")
+        original_img = original_img.resize((1024, 1024), Image.BILINEAR)
 
-        self._status("🏁", f"Full pipeline completed for {input_image_path.name}")
-        return final_img
-
-    def step1_base_generation(self, input_path, base_prompt):
-        self._status("🖼️", "Step 1: Base generation from primary image")
-        input_img = Image.open(input_path).convert("RGB")
-        input_img = input_img.resize((1024, 1024), Image.BILINEAR)
-
-        triggers = ", ".join(l.get("trigger", "") for l in self.config.get("loras", []))
-        full_prompt = f"{triggers}, {base_prompt}, masterpiece, best quality, highly detailed"
+        # Pass 1: Aggressive stylization
+        self._status("🔥", "Pass 1: Aggressive miniaturization")
+        full_prompt = base_prompt + ", miniature diorama, toy town, tilt-shift, exaggerated perspective, soft cartoonish style, whimsical, clean colors"
         full_prompt = truncate_prompt(full_prompt, max_length=280)
 
         generator = torch.Generator(device=self.device).manual_seed(self.config["seed"])
 
+        pass1 = self.pipe(
+            prompt=full_prompt,
+            image=original_img,
+            strength=0.85,           # push hard
+            guidance_scale=7.5,
+            num_inference_steps=50,
+            generator=generator,
+        ).images[0]
+
+        pass1.save(build_output_path(self.config, input_path.stem, "pass1_aggressive"))
+
+        # Pass 2: Recover structure from original
+        self._status("🔄", "Pass 2: Structure recovery")
+        final = self.pipe(
+            prompt=base_prompt + ", highly detailed, realistic, coherent",
+            image=pass1,
+            strength=0.35,           # light recovery
+            guidance_scale=4.0,
+            num_inference_steps=30,
+            generator=generator,
+        ).images[0]
+
+        final.save(build_output_path(self.config, input_path.stem, "final"))
+        self._status("🏁", f"Two-pass test complete for {input_path.name}")
+        return final
+
+    def stage1_base(self, input_path, base_prompt):
+        self._status("🖼️", "Stage 1: Base structure preservation")
+        img = Image.open(input_path).convert("RGB")
+        img = img.resize((1024, 1024), Image.BILINEAR)
+
+        full_prompt = f"{base_prompt}, clean, detailed, realistic, masterpiece"
+        full_prompt = truncate_prompt(full_prompt, max_length=280)
+
+        seed = self.config.get("seed", 42)
+        generator = torch.Generator(device=self.device).manual_seed(seed)
+
         images = self.pipe(
             prompt=full_prompt,
-            image=input_img,
-            strength=self.config.get("strength", 0.65),
-            guidance_scale=self.config.get("guidance_scale", 3.8),
-            num_inference_steps=self.config.get("num_inference_steps", 35),
+            image=img,
+            strength=self.config.get("stage1_strength", 0.40),
+            guidance_scale=self.config.get("stage1_guidance", 4.0),
+            num_inference_steps=self.config.get("stage1_steps", 30),
             generator=generator,
         ).images
 
         result = images[0]
-        output_path = build_output_path(self.config, input_path.stem, "step1_base")
-        result.save(output_path)
+        result.save(build_output_path(self.config, input_path.stem, "stage1_base"))
         return result
 
-    def step2_reference_style(self, base_image, input_stem):
-        self._status("🌆", "Step 2: Inject reference style")
-        ref_name = Path(self.config["reference_image"]).stem
-        full_prompt = f"in the style of {ref_name}, {self.config.get('style_prompt', '')}, masterpiece, best quality"
+    def stage2_miniaturize(self, img, input_stem):
+        self._status("🧸", "Stage 2: Miniaturization pass")
+        full_prompt = "miniature diorama style, toy town, slightly exaggerated perspective, soft outlines, gentle shading, simple yet realistic, clean colors, masterpiece"
 
-        generator = torch.Generator(device=self.device).manual_seed(self.config["seed"] + 100)
+        seed = self.config.get("seed", 42) + 100
+        generator = torch.Generator(device=self.device).manual_seed(seed)
 
         images = self.pipe(
             prompt=full_prompt,
-            image=base_image,
-            strength=self.config.get("style_strength", 0.50),
-            guidance_scale=self.config.get("guidance_scale", 4.0),
-            num_inference_steps=self.config.get("num_inference_steps", 30),
+            image=img,
+            strength=self.config.get("stage2_strength", 0.55),
+            guidance_scale=self.config.get("stage2_guidance", 5.0),
+            num_inference_steps=self.config.get("stage2_steps", 32),
             generator=generator,
         ).images
 
         result = images[0]
-        output_path = build_output_path(self.config, input_stem, "step2_styled")
-        result.save(output_path)
+        result.save(build_output_path(self.config, input_stem, "stage2_mini"))
         return result
 
-    def step3_lora_refine(self, styled_image, input_stem):
-        self._status("✨", "Step 3: LoRA + final refinement")
-        triggers = ", ".join(l.get("trigger", "") for l in self.config.get("loras", []))
-        full_prompt = f"{triggers}, {self.config.get('style_prompt', '')}, masterpiece, best quality, highly detailed"
+    def stage3_cartoon(self, img, input_stem):
+        self._status("🎨", "Stage 3: Cartoonish refinement")
+        full_prompt = "stylized illustration, soft cartoon style, simplified shapes, clear outlines, gentle shading, realistic lighting, coherent scene, masterpiece"
 
-        generator = torch.Generator(device=self.device).manual_seed(self.config["seed"] + 200)
+        seed = self.config.get("seed", 42) + 200
+        generator = torch.Generator(device=self.device).manual_seed(seed)
 
         images = self.pipe(
             prompt=full_prompt,
-            image=styled_image,
-            strength=self.config.get("final_strength", 0.40),
-            guidance_scale=self.config.get("guidance_scale", 4.0),
-            num_inference_steps=self.config.get("num_inference_steps", 28),
+            image=img,
+            strength=self.config.get("stage3_strength", 0.60),
+            guidance_scale=self.config.get("stage3_guidance", 5.5),
+            num_inference_steps=self.config.get("stage3_steps", 34),
             generator=generator,
         ).images
 
         result = images[0]
-        output_path = build_output_path(self.config, input_stem, "step3_final")
-        result.save(output_path)
+        result.save(build_output_path(self.config, input_stem, "stage3_cartoon"))
+        return result
+
+    def stage4_refine(self, img, input_stem):
+        self._status("✨", "Stage 4: Final refinement")
+        full_prompt = "soft, cohesive color palette, gentle contrast, subtle shading, clean details, coherent miniature scene, simple yet realistic, masterpiece"
+
+        seed = self.config.get("seed", 42) + 300
+        generator = torch.Generator(device=self.device).manual_seed(seed)
+
+        images = self.pipe(
+            prompt=full_prompt,
+            image=img,
+            strength=self.config.get("stage4_strength", 0.35),
+            guidance_scale=self.config.get("stage4_guidance", 4.0),
+            num_inference_steps=self.config.get("stage4_steps", 28),
+            generator=generator,
+        ).images
+
+        result = images[0]
+        result.save(build_output_path(self.config, input_stem, "stage4_final"))
         return result
