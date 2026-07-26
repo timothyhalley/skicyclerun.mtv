@@ -1,0 +1,33 @@
+{
+  "comfy_url": "http://127.0.0.1:8188",
+  "workflow_path": "ComfyWF/Flux1D_I2I_V2_API.json",
+  "output_dir": "outputs",
+  "log_csv": "outputs/sweep_log.csv",
+
+  "primary_image": "IMG_3974.webp",
+  "style_image": "JapaneseStreetWitch 2.png",
+
+  "prompt_file": "prompts/multiverse_A.txt",
+  "filename_prefix": "I2I_sweep",
+  "fixed_seed": null,
+
+  "poll_interval": 2.0,
+  "max_wait_seconds": 600,
+
+  "sweeps": [
+    {
+      "node_id": "41",
+      "key": "strength",
+      "start": 0.5,
+      "end": 1.2,
+      "steps": 5
+    },
+    {
+      "node_id": "26",
+      "key": "guidance",
+      "start": 2.5,
+      "end": 5.5,
+      "steps": 4
+    }
+  ]
+}

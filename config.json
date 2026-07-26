@@ -35,12 +35,12 @@
 
   "style_prompt": "tiny, field of depth, hyperdetailed, miniature diorama, whimsical atmosphere",
 
-  "stage1_strength": 0.40,
+  "stage1_strength": 0.35,
   "stage1_guidance": 4.0,
   "stage1_steps": 30,
 
-  "stage2_strength": 0.55,
-  "stage2_guidance": 5.0,
+  "stage2_strength": 0.60,
+  "stage2_guidance": 5.5,
   "stage2_steps": 32,
 
   "stage3_strength": 0.60,
@@ -49,5 +49,9 @@
 
   "stage4_strength": 0.35,
   "stage4_guidance": 4.0,
-  "stage4_steps": 28
+  "stage4_steps": 28,
+
+  "style_strength": 0.50,
+  "final_strength": 0.30,
+  "guidance_scale": 4.5
 }

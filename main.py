@@ -1,4 +1,4 @@
-from pipeline_steps import MiniaturizationPipeline
+from pipeline_steps import ControlledPipeline
 from utils import RunLogger, load_config, load_images_from_dir, generate_seed
 from pathlib import Path
 import tqdm
@@ -11,7 +11,7 @@ def main():
     run_logger = RunLogger(config.get("log_file", "logs/run.log"))
     run_logger.status("🚀", f"Start run | Seed: {seed}", "load pipeline")
 
-    pipeline = MiniaturizationPipeline(config, run_logger=run_logger)
+    pipeline = ControlledPipeline(config, run_logger=run_logger)
     pipeline.load_pipeline()
 
     input_images = load_images_from_dir(config["input_dir"])
