@@ -3,12 +3,12 @@
   "workflow_path": "ComfyWF/Flux1D_I2I_V2_API.json",
   "output_dir": "outputs",
   "log_csv": "outputs/sweep_log.csv",
+  "prompt_file": "prompts/multiverse_A.txt",
 
   "primary_image": "IMG_3974.webp",
-  "style_image": "JapaneseStreetWitch 2.png",
+  "style_image": "MassiveStarshipDesertPlanet.png",
 
-  "prompt_file": "prompts/multiverse_A.txt",
-  "filename_prefix": "I2I_sweep",
+  "filename_prefix": "I2I_creativity",
   "fixed_seed": null,
 
   "poll_interval": 2.0,
@@ -16,18 +16,20 @@
 
   "sweeps": [
     {
-      "node_id": "41",
-      "key": "strength",
-      "start": 0.5,
-      "end": 1.2,
-      "steps": 5
+      "node_id": "17",
+      "key": "denoise",
+      "start": 0.35,
+      "end": 0.95,
+      "steps": 6,
+      "label": "denoise"
     },
     {
-      "node_id": "26",
-      "key": "guidance",
-      "start": 2.5,
-      "end": 5.5,
-      "steps": 4
+      "node_id": "41",
+      "key": "strength",
+      "start": 0.45,
+      "end": 1.15,
+      "steps": 5,
+      "label": "style_strength"
     }
   ]
 }

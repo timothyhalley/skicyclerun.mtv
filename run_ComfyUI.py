@@ -20,6 +20,10 @@ def load_workflow(path):
     with open(path, "r") as f:
         return json.load(f)
 
+def load_prompt(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
 def submit_prompt(base_url, workflow):
     url = f"{base_url}/prompt"
     response = requests.post(url, json={"prompt": workflow})
@@ -28,7 +32,6 @@ def submit_prompt(base_url, workflow):
     return response.json()["prompt_id"]
 
 def wait_for_completion(base_url, prompt_id, poll_interval=2.0, max_wait=600):
-    """Poll /history until the prompt is finished."""
     history_url = f"{base_url}/history/{prompt_id}"
     start = time.time()
 
@@ -45,7 +48,6 @@ def wait_for_completion(base_url, prompt_id, poll_interval=2.0, max_wait=600):
         time.sleep(poll_interval)
 
 def download_images(base_url, history_entry, output_dir, prefix):
-    """Download all output images from a completed history entry."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -70,7 +72,6 @@ def download_images(base_url, history_entry, output_dir, prefix):
                 print(f"   ⚠️  Failed to download {filename}")
                 continue
 
-            # Build a clean local name
             local_name = f"{prefix}_{filename}"
             local_path = output_dir / local_name
             with open(local_path, "wb") as f:
@@ -81,14 +82,13 @@ def download_images(base_url, history_entry, output_dir, prefix):
     return saved_files
 
 def generate_sweep_values(sweeps):
-    """Create all combinations of sweep values."""
     value_lists = []
     labels = []
 
     for s in sweeps:
         vals = np.linspace(s["start"], s["end"], s["steps"]).tolist()
         value_lists.append(vals)
-        labels.append(f"{s['node_id']}.{s['key']}")
+        labels.append(s.get("label", f"{s['node_id']}.{s['key']}"))
 
     combinations = list(itertools.product(*value_lists))
     return combinations, labels
@@ -102,6 +102,10 @@ def main():
     workflow_template = load_workflow(cfg["workflow_path"])
     base_url = cfg["comfy_url"].rstrip("/")
 
+    # Load prompt from file
+    prompt_text = load_prompt(cfg["prompt_file"])
+    print(f"📝 Prompt loaded from {cfg['prompt_file']} ({len(prompt_text)} chars)")
+
     Path(cfg["output_dir"]).mkdir(parents=True, exist_ok=True)
 
     # Prepare CSV log
@@ -112,12 +116,11 @@ def main():
 
     combinations, labels = generate_sweep_values(cfg["sweeps"])
 
-    # Write header if new file
     if not log_exists:
         header = ["timestamp", "prompt_id"] + labels + ["output_files", "status"]
         writer.writerow(header)
 
-    print(f"🚀 Starting parameter sweep")
+    print(f"🚀 Starting creativity sweep (Low → High)")
     print(f"   Total combinations: {len(combinations)}")
     print(f"   Parameters: {labels}")
     print("-" * 70)
@@ -128,7 +131,7 @@ def main():
         # Inject images + prompt
         workflow["40"]["inputs"]["image"] = cfg["primary_image"]
         workflow["47"]["inputs"]["image"] = cfg["style_image"]
-        workflow["6"]["inputs"]["text"] = cfg["prompt"]
+        workflow["6"]["inputs"]["text"] = prompt_text
 
         # Apply all swept values
         param_str_parts = []
@@ -136,9 +139,10 @@ def main():
             node_id = s["node_id"]
             key = s["key"]
             workflow[node_id]["inputs"][key] = float(value)
-            param_str_parts.append(f"{key}={value:.3f}")
+            label = s.get("label", key)
+            param_str_parts.append(f"{label}={value:.3f}")
 
-        param_str = "_".join(param_str_parts)
+        param_str = "__".join(param_str_parts)
         print(f"[{i+1:03d}/{len(combinations)}] {param_str}")
 
         # Optional fixed seed
@@ -193,13 +197,12 @@ def main():
         ])
         log_file.flush()
 
-        # Small pause between jobs
         time.sleep(1.0)
 
     log_file.close()
     print("-" * 70)
-    print(f"✅ Sweep finished. Log saved to: {log_path}")
-    print(f"   Images are in: {cfg['output_dir']}")
+    print(f"✅ Sweep finished. Log: {log_path}")
+    print(f"   Images: {cfg['output_dir']}")
 
 if __name__ == "__main__":
     main()
