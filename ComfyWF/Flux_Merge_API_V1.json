@@ -1,7 +1,7 @@
 {
   "6": {
     "inputs": {
-      "text": "A miniature diorama of a popup book scene of Gotham City harbour, toy‑town style, brooding skyscrapers and gritty alleyways rendered as tiny,\nhigh‑detail models, exaggerated perspective, minimal foreground blur,\nshallow depth of field, tilt‑shift photography effect,\nmoody urban lighting with neon glows and deep shadows,\nwhimsical yet noir‑realistic atmosphere,\nclean but dramatic color palette,\nmasterpiece.\n\nDo not add artifacts or random illogical items.\nWater is for boats; streets are for cars.\n\n",
+      "text": "The lady is a cyborg; beautiful and mesmerizing.",
       "clip": [
         "11",
         0
@@ -30,7 +30,7 @@
   },
   "9": {
     "inputs": {
-      "filename_prefix": "mini_",
+      "filename_prefix": "ComfyUI",
       "images": [
         "8",
         0
@@ -142,7 +142,7 @@
   },
   "25": {
     "inputs": {
-      "noise_seed": 386638779228380
+      "noise_seed": 379351142559196
     },
     "class_type": "RandomNoise",
     "_meta": {
@@ -217,7 +217,7 @@
   },
   "40": {
     "inputs": {
-      "image": "IMG_3093.webp"
+      "image": "QuebecCityLady.webp"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -296,7 +296,7 @@
   },
   "47": {
     "inputs": {
-      "image": "Gotham2.jpg"
+      "image": "LadyMonochromeFace_7.png"
     },
     "class_type": "LoadImage",
     "_meta": {

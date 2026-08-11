@@ -5,7 +5,6 @@ import csv
 import requests
 from pathlib import Path
 from datetime import datetime
-import itertools
 import piexif
 
 
@@ -35,102 +34,119 @@ def submit_prompt(base_url, workflow):
 def wait_for_completion(base_url, prompt_id, poll_interval=2.0, max_wait=600):
     history_url = f"{base_url}/history/{prompt_id}"
     start = time.time()
-
     while True:
         if time.time() - start > max_wait:
             raise TimeoutError(f"Timed out waiting for prompt {prompt_id}")
-
         r = requests.get(history_url)
         if r.status_code == 200:
             data = r.json()
             if prompt_id in data:
                 return data[prompt_id]
-
         time.sleep(poll_interval)
 
 def download_images(base_url, history_entry, output_dir, prefix):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
     saved_files = []
-    outputs = history_entry.get("outputs", {})
-
-    for node_id, node_output in outputs.items():
+    for node_id, node_output in history_entry.get("outputs", {}).items():
         if "images" not in node_output:
             continue
         for img_info in node_output["images"]:
             filename = img_info["filename"]
-            subfolder = img_info.get("subfolder", "")
-            img_type = img_info.get("type", "output")
-
             params = {
                 "filename": filename,
-                "subfolder": subfolder,
-                "type": img_type
+                "subfolder": img_info.get("subfolder", ""),
+                "type": img_info.get("type", "output")
             }
             r = requests.get(f"{base_url}/view", params=params)
             if r.status_code != 200:
                 print(f"   ⚠️  Failed to download {filename}")
                 continue
-
             local_name = f"{prefix}_{filename}"
             local_path = output_dir / local_name
             with open(local_path, "wb") as f:
                 f.write(r.content)
             saved_files.append(str(local_path))
             print(f"   💾 Saved: {local_name}")
-
     return saved_files
-
-def generate_sweep_values(sweeps):
-    value_lists = []
-    labels = []
-
-    for s in sweeps:
-        start = s["start"]
-        step = s["step"]
-        iterations = s["iterations"]
-        vals = [(start + step * i) for i in range(iterations)]
-        value_lists.append(vals)
-        labels.append(s.get("label", f"{s['node_id']}.{s['key']}"))
-
-    combinations = list(itertools.product(*value_lists))
-    return combinations, labels
 
 def list_images(folder):
     p = Path(folder)
     exts = {".png", ".jpg", ".jpeg", ".webp"}
     return [str(f) for f in p.iterdir() if f.suffix.lower() in exts]
 
-def build_prefix(prefix_base, image_name, seed, combo, labels):
-    parts = [prefix_base, image_name, f"s{seed}"]
+def generate_values(start, step, iterations):
+    return [round(start + step * i, 4) for i in range(iterations)]
 
-    for label, value in zip(labels, combo):
-        short = label[0].lower()  # d, s, g
-        val = int(value * 1000)   # 0.950 → 950
-        parts.append(f"{short}{val}")
-
-    return "_".join(parts)
+def build_prefix(prefix_base, image_name, seed, label, value):
+    short = label[0].lower()
+    val = int(value * 1000)
+    return f"{prefix_base}{image_name}_s{seed}_{short}{val}"
 
 def embed_metadata(path, metadata):
+    """
+    Embed metadata into the image.
+    - JPEG/TIFF → uses piexif (EXIF)
+    - PNG → uses tEXt chunks via Pillow
+    """
+    from pathlib import Path
+    path = Path(path)
+
     try:
-        exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+        comment = "\n".join(f"{k}: {v}" for k, v in metadata.items())
+        print(f"   📝 Attempting to embed metadata into {path.name}...")
 
-        # Build a readable metadata block
-        comment = "\n".join([f"{k}: {v}" for k, v in metadata.items()])
+        suffix = path.suffix.lower()
 
-        # EXIF requires bytes, not str
-        exif_dict["0th"][piexif.ImageIFD.ImageDescription] = comment.encode("utf-8")
+        if suffix in {".jpg", ".jpeg", ".tif", ".tiff"}:
+            # --- JPEG / TIFF path (piexif) ---
+            import piexif
+            exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+            exif_dict["0th"][piexif.ImageIFD.ImageDescription] = comment.encode("utf-8")
+            exif_bytes = piexif.dump(exif_dict)
+            piexif.insert(exif_bytes, str(path))
+            print(f"   ✅ Metadata embedded (EXIF / piexif)")
 
-        exif_bytes = piexif.dump(exif_dict)
-        piexif.insert(exif_bytes, path)
+        elif suffix == ".png":
+            # --- PNG path (Pillow tEXt) ---
+            from PIL import Image, PngImagePlugin
+            img = Image.open(path)
 
-        print(f"   📝 Metadata embedded")
+            meta = PngImagePlugin.PngInfo()
+            # Store the full block under a single key
+            meta.add_text("parameters", comment)
+            # Also store individual keys for easier reading later
+            for k, v in metadata.items():
+                meta.add_text(str(k), str(v))
+
+            img.save(path, pnginfo=meta)
+            print(f"   ✅ Metadata embedded (PNG tEXt)")
+
+        else:
+            print(f"   ⚠️ Unsupported format for metadata: {suffix}")
+            return
 
     except Exception as e:
-        print(f"   ⚠️ Metadata failed: {e}")
+        import traceback
+        print(f"   ⚠️ Metadata failed: {type(e).__name__}: {e}")
+        print("   ── Full traceback ──")
+        traceback.print_exc()
 
 
+# --------------------------------------------------
+# Pretty printing helpers
+# --------------------------------------------------
+
+def print_header(title):
+    print("\n" + "═" * 70)
+    print(f"  {title}")
+    print("═" * 70)
+
+def print_section(title):
+    print(f"\n── {title} ──────────────────────────────────────")
+
+def print_kv(emoji, key, value, width=18):
+    print(f"   {emoji} {key:<{width}} : {value}")
 
 
 # --------------------------------------------------
@@ -141,182 +157,196 @@ def main():
     cfg = load_config()
     workflow_template = load_workflow(cfg["workflow_path"])
     base_url = cfg["comfy_url"].rstrip("/")
-
     prompt_text = load_prompt(cfg["prompt_file"])
-    print(f"📝 Prompt loaded from {cfg['prompt_file']} ({len(prompt_text)} chars)")
 
-    print("──────────────────────────────────────────────")
-    print("📣 PROMPT CONTENT")
-    print("──────────────────────────────────────────────")
+    # --- Sweep setup ---
+    sweep = cfg["sweep"]
+    target_name = sweep["target"]
+    node_def = cfg["nodes"][target_name]
+    node_id = node_def["node_id"]
+    key = node_def["key"]
+    values = generate_values(sweep["start"], sweep["step"], sweep["iterations"])
+
+    # --- Startup banner ---
+    print_header("🚀  COMFYUI PARAMETER SWEEP  🚀")
+    print_kv("📝", "Prompt file", cfg["prompt_file"])
+    print_kv("📄", "Prompt length", f"{len(prompt_text)} chars")
+    print_kv("🖼️", "Input folder", cfg["input_folder"])
+    print_kv("🎨", "Style image", cfg["style_image"])
+    print_kv("📁", "Output dir", cfg["output_dir"])
+    print_kv("🧪", "Dry run", cfg.get("dry_run", False))
+
+    print_section("PROMPT")
     print(prompt_text)
-    print("──────────────────────────────────────────────\n")
 
+    print_section("SWEEP TARGET")
+    print_kv("🎯", "Target", target_name)
+    print_kv("🔢", "Node", f"{node_id}.{key}")
+    print_kv("📈", "Values", values)
+    print_kv("🔄", "Iterations", len(values))
+
+    # Show what the other important nodes will be set to
+    print_section("FIXED SETTINGS (will be the same for every run)")
+    # These are the common ones people care about
+    fixed_map = {
+        "denoise":        ("17", "denoise",   "🔧"),
+        "style_strength": ("41", "strength",  "🎨"),
+        "guidance":       ("26", "guidance",  "⚡"),
+    }
+    for name, (nid, k, emoji) in fixed_map.items():
+        if name == target_name:
+            print_kv(emoji, name, f"(being swept → {values})")
+        else:
+            # Try to read the default from the workflow if possible
+            try:
+                default = workflow_template[nid]["inputs"].get(k, "unknown")
+            except Exception:
+                default = "unknown"
+            print_kv(emoji, name, default)
+
+    images = list_images(cfg["input_folder"])
+    if not images:
+        print(f"\n⚠️  No images found in {cfg['input_folder']}")
+        return
+
+    print_section("IMAGES TO PROCESS")
+    print_kv("📷", "Count", len(images))
+    for i, img in enumerate(images, 1):
+        print(f"      {i:2d}. {Path(img).name}")
+
+    total_runs = len(images) * len(values)
+    print_kv("🧮", "Total runs", total_runs)
+    print("═" * 70)
+
+    # --- Logging ---
     Path(cfg["output_dir"]).mkdir(parents=True, exist_ok=True)
-
     log_path = Path(cfg["log_csv"])
     log_exists = log_path.exists()
     log_file = open(log_path, "a", newline="", encoding="utf-8")
     writer = csv.writer(log_file)
-
-    combinations, labels = generate_sweep_values(cfg["sweeps"])
-
     if not log_exists:
-        header = ["timestamp", "prompt_id"] + labels + ["seed", "image", "output_files", "status"]
-        writer.writerow(header)
-
-    images = list_images(cfg["input_folder"])
-    if not images:
-        print(f"⚠️ No images found in {cfg['input_folder']}")
-        return
-
-    print(f"🚀 Starting sweep")
-    print(f"   Total images: {len(images)}")
-    print(f"   Total combinations per image: {len(combinations)}")
-    print(f"   Parameters: {labels}")
-    print(f"   Dry run: {cfg.get('dry_run', False)}")
-    print("-" * 70)
+        writer.writerow(["timestamp", "prompt_id", target_name, "seed", "image", "output_files", "status"])
 
     dry_run = cfg.get("dry_run", False)
+    run_counter = 0
 
     for img_idx, image_path in enumerate(images, start=1):
         image_name = Path(image_path).stem
-        print(f"📷 [{img_idx}/{len(images)}] Image: {image_path}")
 
-        for i, combo in enumerate(combinations):
+        print_header(f"📷  IMAGE {img_idx}/{len(images)}  →  {Path(image_path).name}")
+
+        for i, value in enumerate(values):
+            run_counter += 1
             workflow = copy.deepcopy(workflow_template)
 
-            # inject images + prompt
+            # Inject fixed inputs
             workflow["40"]["inputs"]["image"] = image_path
             workflow["47"]["inputs"]["image"] = cfg["style_image"]
             workflow["6"]["inputs"]["text"] = prompt_text
 
-            # apply swept values
-            param_str_parts = []
-            for s, value in zip(cfg["sweeps"], combo):
-                node_id = s["node_id"]
-                key = s["key"]
-                workflow[node_id]["inputs"][key] = float(value)
-                label = s.get("label", key)
-                param_str_parts.append(f"{label}={value:.3f}")
+            # The single swept value
+            workflow[node_id]["inputs"][key] = float(value)
 
-            param_str = "__".join(param_str_parts)
-
-            # seed logic: fixed or per-image deterministic
+            # Seed
             if cfg.get("fixed_seed") is not None:
                 seed = int(cfg["fixed_seed"])
             else:
-                # simple deterministic seed from image name + combo index
                 seed = abs(hash(f"{image_name}_{i}")) % (2**31)
-            workflow["25"]["inputs"]["noise_seed"] = int(seed)
+            workflow["25"]["inputs"]["noise_seed"] = seed
 
-            prefix = build_prefix(cfg['filename_prefix'], image_name, seed, combo, labels)
+            # Filename
+            prefix = build_prefix(cfg["filename_prefix"], image_name, seed, target_name, value)
             workflow["9"]["inputs"]["filename_prefix"] = prefix
 
-            print(f"[{i+1:03d}/{len(combinations)}]")
-            icons = {
-                "denoise": "🔧",
-                "style_strength": "🎨",
-                "guidance": "⚡"
-            }
+            # ---- Verbose status block ----
+            print(f"\n┌─ Run {run_counter:03d}/{total_runs} ─────────────────────────────────────┐")
+            print_kv("🎯", "Sweeping", f"{target_name} = {value:.4f}")
+            print_kv("🌱", "Seed", seed)
+            print_kv("🖼️", "Subject", Path(image_path).name)
+            print_kv("🎨", "Style ref", Path(cfg["style_image"]).name)
+            print_kv("📝", "Prompt", prompt_text[:60] + ("…" if len(prompt_text) > 60 else ""))
+            print_kv("💾", "Prefix", prefix)
 
-            for label, value in zip(labels, combo):
-                icon = icons.get(label, "🔧")
-                print(f"   {icon} {label:<12} = {value:.3f}")
+            # Show the other parameters that are currently fixed
+            for name, (nid, k, emoji) in fixed_map.items():
+                if name == target_name:
+                    continue
+                try:
+                    current = workflow[nid]["inputs"].get(k, "unknown")
+                except Exception:
+                    current = "unknown"
+                print_kv(emoji, name, current)
+
+            print("└──────────────────────────────────────────────────────────┘")
 
             if dry_run:
-                # sanity check only
+                print("   🧪 DRY RUN – skipping submit")
                 writer.writerow([
-                    datetime.now().isoformat(),
-                    "",
-                    *[f"{v:.4f}" for v in combo],
-                    seed,
-                    image_path,
-                    "",
-                    "dry_run"
+                    datetime.now().isoformat(), "", f"{value:.4f}",
+                    seed, image_path, "", "dry_run"
                 ])
                 log_file.flush()
                 continue
 
-            # submit
+            # Submit
             try:
+                print("   📤 Submitting to ComfyUI…")
                 prompt_id = submit_prompt(base_url, workflow)
-                print(f"   → Submitted. ID: {prompt_id}")
+                print(f"   ✅ Submitted  →  prompt_id: {prompt_id}")
             except Exception as e:
-                print(f"   → Submit ERROR: {e}")
-                writer.writerow([datetime.now().isoformat(), "", *[f"{v:.4f}" for v in combo], seed, image_path, "", "submit_failed"])
+                print(f"   ❌ Submit ERROR: {e}")
+                writer.writerow([datetime.now().isoformat(), "", f"{value:.4f}", seed, image_path, "", "submit_failed"])
                 log_file.flush()
                 continue
 
-            # wait
+            # Wait
             try:
+                print("   ⏳ Waiting for completion…")
                 history = wait_for_completion(
-                    base_url,
-                    prompt_id,
+                    base_url, prompt_id,
                     poll_interval=cfg.get("poll_interval", 2.0),
                     max_wait=cfg.get("max_wait_seconds", 600)
                 )
-                print(f"   → Completed")
+                print("   ✅ Generation complete")
             except Exception as e:
-                print(f"   → Wait ERROR: {e}")
-                writer.writerow([datetime.now().isoformat(), prompt_id, *[f"{v:.4f}" for v in combo], seed, image_path, "", "timeout"])
+                print(f"   ❌ Wait ERROR: {e}")
+                writer.writerow([datetime.now().isoformat(), prompt_id, f"{value:.4f}", seed, image_path, "", "timeout"])
                 log_file.flush()
                 continue
 
-            # download
+            # Download + metadata
             try:
+                print("   📥 Downloading images…")
                 saved = download_images(base_url, history, cfg["output_dir"], prefix)
                 status = "success" if saved else "no_images"
-
-                for saved_path in saved:
-                    denoise_val = combo[labels.index("denoise")]
-                    style_val = combo[labels.index("style_strength")]
-                    guidance_val = combo[labels.index("guidance")]
-
-                    metadata = {
+                for path in saved:
+                    embed_metadata(path, {
                         "seed": seed,
-                        "denoise": denoise_val,
-                        "style_strength": style_val,
-                        "guidance": guidance_val,
+                        target_name: value,
                         "prompt": prompt_text,
                         "timestamp": datetime.now().isoformat()
-                    }
-
-                    embed_metadata(saved_path, metadata)
-
+                    })
+                if saved:
+                    print(f"   🎉 Success – {len(saved)} image(s) saved")
             except Exception as e:
-                print(f"   → Download ERROR: {e}")
+                print(f"   ❌ Download ERROR: {e}")
                 saved = []
                 status = "download_failed"
 
             writer.writerow([
-                datetime.now().isoformat(),
-                prompt_id,
-                *[f"{v:.4f}" for v in combo],
-                seed,
-                image_path,
-                ";".join(saved),
-                status
+                datetime.now().isoformat(), prompt_id, f"{value:.4f}",
+                seed, image_path, ";".join(saved), status
             ])
             log_file.flush()
-
             time.sleep(1.0)
 
     log_file.close()
-    print("-" * 70)
-    print(f"✅ Sweep finished. Log: {log_path}")
-    print(f"   Images: {cfg['output_dir']}")
 
-    total_images = len(images)
-    total_combos = len(combinations)
-    total_runs = total_images * total_combos
-
-    print("\n📊 SUMMARY")
-    print(f"   Images processed: {total_images}")
-    print(f"   Sweep combinations: {total_combos}")
-    print(f"   Total runs: {total_runs}")
-    print(f"   Steps: {workflow_template['17']['inputs']['steps']}")
-    print(f"   Sampler: {workflow_template['16']['inputs']['sampler_name']}")
-    print(f"   Estimated time: ~{total_runs * cfg.get('poll_interval', 2.0):.1f} seconds")
+    print_header("✅  SWEEP FINISHED")
+    print_kv("📄", "Log file", str(log_path))
+    print_kv("📁", "Output folder", cfg["output_dir"])
+    print_kv("🧮", "Total runs completed", run_counter)
+    print("═" * 70)
 
 
 if __name__ == "__main__":
