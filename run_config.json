@@ -1,16 +1,15 @@
 {
   "comfy_url": "http://127.0.0.1:8188",
-  "workflow_path": "ComfyWF/Flux_Merge_API_V1.json",
-  "output_dir": "outputs",
-  "log_csv": "outputs/sweep_log.csv",
-  "prompt_file": "prompts/multiverse_A.txt",
-
-  "input_folder": "/Volumes/MySSD/Comfy-Lib/input/covers",
-  "style_image": "/Volumes/MySSD/Comfy-Lib/input/style_images/Multmoonscape.png",
-
-  "filename_prefix": "See_",
+  "base_dir": "/Volumes/MySSD/Comfy-Lib",
+  "workflow_path": "ComfyWF/FluxRedux_V1_API.json",
+  "comfy_input_dir": "input",
+  "output_dir": "output",
+  "log_csv": "output/sweep_log.csv",
+  "prompt_file": "prompts/Reburn.txt",
+  "input_folder": "/Volumes/MySSD/Comfy-Lib/Covers/UrbanArchitecture",
+  "style_image": "/Volumes/MySSD/Comfy-Lib/style_images/Kowloon_3.png",
+  "filename_prefix": "G2_",
   "fixed_seed": null,
-
   "poll_interval": 2.0,
   "max_wait_seconds": 600,
   "dry_run": false,
@@ -18,15 +17,23 @@
   "nodes": {
     "denoise": {
       "node_id": "17",
-      "key": "denoise"
+      "key": "denoise",
+      "value": 0.92
+    },
+    "primary_strength": {
+      "node_id": "41",
+      "key": "strength",
+      "value": 0.62
     },
     "style_strength": {
-      "node_id": "41",
-      "key": "strength"
+      "node_id": "45",
+      "key": "strength",
+      "value": 0.78
     },
     "guidance": {
       "node_id": "26",
-      "key": "guidance"
+      "key": "guidance",
+      "value": 2.6
     }
   },
 
